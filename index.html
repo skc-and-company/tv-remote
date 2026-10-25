@@ -243,13 +243,14 @@
     </div>
   </div>
 
+  <div class="small" id="diag"></div>
   <div class="small" id="version"></div>
 </div>
 
 <script>
 (function () {
   "use strict";
-  var REMOTE_VERSION = "3";
+  var REMOTE_VERSION = "4";
 
   // ---------- Settings from the QR code (#ip=…&app=…) ----------
   var hash = {};
@@ -315,14 +316,7 @@
         return;
       }
       if (!opened) {
-        // Usually the TV's self-signed certificate hasn't been accepted on this phone yet.
-        setStatus("Not connected", "bad");
-        var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        notice("<strong>One-time setup on this phone</strong>Your TV uses its own security certificate. Open the TV’s secure address below, choose " +
-          (ios ? "<b>Show Details → visit this website</b>" : "<b>Advanced → Proceed</b>") + ", then come back here." +
-          "<br>Also make sure this phone is on the same Wi-Fi as the TV (" + ip + ").<br>" +
-          "<a href='https://" + ip + ":8002/api/v2/' target='_blank' rel='noopener'>Open TV address</a>" +
-          (ios && retry > 3 ? "<br><br>Still not connecting? iPhone may block this kind of connection. Samsung’s free SmartThings app has a full remote for this TV.<br><a href='https://apps.apple.com/app/smartthings/id1222822904' target='_blank' rel='noopener'>Get SmartThings</a>" : ""));
+        notReached();
       } else if (wasConnected) {
         setStatus("Reconnecting…", "");
       } else {
@@ -334,6 +328,65 @@
       }
       scheduleRetry();
     };
+  }
+
+  // The connection never opened: find out whether Chrome's local-network permission or the
+  // TV's certificate is in the way, and say which.
+  var diagRunning = false, lastCause = "";
+  function notReached() {
+    setStatus("Not connected", "bad");
+    if (diagRunning) return;
+    diagRunning = true;
+    lnaState(function (state) {
+      if (state === "denied") return done("lna-denied", state);
+      if (state === "prompt") return done("lna-prompt", state);
+      probeTv(function (ok) { done(ok ? "socket-blocked" : "cert", state); });
+    });
+    function done(cause, state) {
+      diagRunning = false;
+      $("diag").textContent = "Check: local network " + state + " · TV " + (cause === "socket-blocked" ? "reachable" : cause === "cert" ? "not reachable yet" : "–");
+      if (cause !== lastCause || !$("notice").classList.contains("show")) showCause(cause);
+      lastCause = cause;
+    }
+  }
+
+  function lnaState(cb) {
+    if (!navigator.permissions || !navigator.permissions.query) { cb("unknown"); return; }
+    navigator.permissions.query({ name: "local-network-access" }).then(function (p) { cb(p.state); }, function () {
+      navigator.permissions.query({ name: "local-network" }).then(function (p) { cb(p.state); }, function () { cb("unknown"); });
+    });
+  }
+
+  // Can this browser make any secure request to the TV? (Fails until the certificate is accepted.)
+  function probeTv(cb) {
+    var finished = false;
+    var t = setTimeout(function () { if (!finished) { finished = true; cb(false); } }, 6000);
+    var end = function (ok) { if (!finished) { finished = true; clearTimeout(t); cb(ok); } };
+    try {
+      fetch("https://" + ip + ":8002/api/v2/", { mode: "no-cors", cache: "no-store", targetAddressSpace: "local" })
+        .then(function () { end(true); }, function () { end(false); });
+    } catch (e) { end(false); }
+  }
+
+  function showCause(cause) {
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (cause === "lna-denied") {
+      notice("<strong>Chrome is blocking your home network</strong>This page isn’t allowed to talk to devices on your Wi-Fi. Tap the icon at the <b>left of the address bar</b> → <b>Permissions</b> (or Site settings) → <b>Local network access</b> → <b>Allow</b>, then reload.<br><button class='link' onclick='location.reload()'>Reload</button>");
+    } else if (cause === "lna-prompt") {
+      notice("<strong>Let this page reach your TV</strong>Chrome asks before a website talks to devices on your Wi-Fi. Tap the button, then choose <b>Allow</b>.<br><button class='link' id='lna-go'>Allow access to my TV</button>");
+      var b = $("lna-go");
+      if (b) b.onclick = function () { probeTv(function () { lastCause = ""; retry = 0; connect(); }); };
+    } else if (cause === "socket-blocked") {
+      notice("<strong>Almost there</strong>Your phone can reach the TV, but the live connection was blocked. Reload this page; if it stays, close the tab and scan the TV’s QR code again.<br><button class='link' onclick='location.reload()'>Reload</button>");
+    } else {
+      notice("<strong>One-time setup on this phone</strong>" +
+        "1. Tap <b>Open TV address</b> below.<br>" +
+        "2. On the warning page tap " + (ios ? "<b>Show Details → visit this website</b>" : "<b>Advanced → Proceed to " + ip + "</b>") + ". It’s your own TV, so this is safe.<br>" +
+        "3. A page of text appears (starting with {&quot;device&quot;). Come back to this tab; it connects by itself.<br>" +
+        "Your phone must be on the same Wi-Fi as the TV.<br>" +
+        "<a href='https://" + ip + ":8002/api/v2/' target='_blank' rel='noopener'>Open TV address</a>" +
+        (ios && retry > 3 ? "<br><br>Still not connecting? iPhone may block this kind of connection. Samsung’s free SmartThings app has a full remote for this TV.<br><a href='https://apps.apple.com/app/smartthings/id1222822904' target='_blank' rel='noopener'>Get SmartThings</a>" : ""));
+    }
   }
 
   function showAllow(timedOut) {
