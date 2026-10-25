@@ -2,569 +2,73 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0c10">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>TV Remote</title>
+<!-- The TV's QR code opens this page. Phone browsers can't control this TV directly (Chrome won't let
+     a website use the TV's self-signed certificate), so it hands over to Samsung's official SmartThings app. -->
 <style>
-  :root {
-    --bg: #0b0c10;
-    --panel: #16181f;
-    --panel-2: #1e212a;
-    --edge: rgba(255, 255, 255, 0.08);
-    --text: #f4f5f7;
-    --dim: rgba(244, 245, 247, 0.6);
-    --accent: #5b8cff;
-    --ok: #34c759;
-    --warn: #ffb020;
-    --bad: #ff453a;
-    --ease: cubic-bezier(0.2, 0.9, 0.25, 1);
-  }
+  :root { --bg: #0b0c10; --panel: #16181f; --edge: rgba(255, 255, 255, 0.08); --text: #f4f5f7; --dim: rgba(244, 245, 247, 0.62); --accent: #5b8cff; }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { background: var(--bg); color: var(--text); height: 100%; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased; overscroll-behavior: none;
-    user-select: none; -webkit-user-select: none; touch-action: manipulation;
-  }
-  .app {
-    max-width: 460px; margin: 0 auto; min-height: 100%;
-    padding: calc(env(safe-area-inset-top) + 14px) 18px calc(env(safe-area-inset-bottom) + 18px);
-    display: flex; flex-direction: column; gap: 16px;
-  }
-
-  /* Header */
-  header { display: flex; align-items: center; justify-content: space-between; }
-  .status { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--dim); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 4px rgba(255, 176, 32, 0.15); transition: background 0.3s; }
-  .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.15); }
-  .dot.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.15); }
-  .status b { color: var(--text); font-weight: 600; }
-  .power {
-    width: 46px; height: 46px; border-radius: 50%; border: 0;
-    background: rgba(255, 69, 58, 0.14); color: var(--bad); display: grid; place-items: center;
-  }
-
-  /* Notice */
-  .notice {
-    display: none; background: var(--panel); border: 1px solid var(--edge); border-radius: 20px;
-    padding: 16px 18px; font-size: 15px; line-height: 1.45; color: var(--dim);
-  }
-  .notice.show { display: block; }
-  .notice strong { color: var(--text); display: block; font-size: 16px; margin-bottom: 6px; }
-  .notice a, .notice button.link {
-    display: inline-block; margin-top: 12px; padding: 10px 16px; border-radius: 12px;
-    background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; font-size: 15px; border: 0;
-  }
-
-  /* Pad */
-  .pad-wrap { position: relative; }
-  .mode {
-    position: absolute; right: 12px; top: 12px; z-index: 2; border: 0; border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08); color: var(--dim); font-size: 13px; font-weight: 600; padding: 7px 12px;
-  }
-  .touchpad {
-    height: 300px; border-radius: 28px; background:
-      radial-gradient(circle at 50% 40%, rgba(91, 140, 255, 0.10), rgba(0, 0, 0, 0) 60%), var(--panel);
-    border: 1px solid var(--edge); position: relative; overflow: hidden; touch-action: none;
-  }
-  .touchpad .hint {
-    position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font-size: 13px; color: var(--dim);
-  }
-  .ripple {
-    position: absolute; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%;
-    background: rgba(255, 255, 255, 0.18); pointer-events: none; animation: rip 0.45s var(--ease) forwards;
-  }
-  @keyframes rip { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
-  .arrow-flash {
-    position: absolute; font-size: 40px; color: rgba(255, 255, 255, 0.5); pointer-events: none;
-    animation: flash 0.4s ease-out forwards;
-  }
-  @keyframes flash { from { opacity: 1; } to { opacity: 0; } }
-
-  .dpad {
-    display: none; height: 300px; border-radius: 28px; background: var(--panel); border: 1px solid var(--edge);
-    position: relative;
-  }
-  .dpad.show { display: block; }
-  .touchpad.hide { display: none; }
-  .ring {
-    position: absolute; left: 50%; top: 50%; width: 250px; height: 250px; margin: -125px 0 0 -125px;
-    border-radius: 50%; background: var(--panel-2); border: 1px solid var(--edge);
-  }
-  .ring button {
-    position: absolute; border: 0; background: transparent; color: var(--text); font-size: 26px;
-    width: 80px; height: 80px; border-radius: 50%;
-  }
-  .ring .u { left: 85px; top: 0; } .ring .d { left: 85px; bottom: 0; }
-  .ring .l { left: 0; top: 85px; } .ring .r { right: 0; top: 85px; }
-  .ring .ok {
-    left: 62px; top: 62px; width: 126px; height: 126px; background: #2a2e3a; font-size: 18px; font-weight: 700;
-  }
-
-  /* Buttons */
-  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .btn {
-    height: 62px; border-radius: 20px; border: 1px solid var(--edge); background: var(--panel);
-    color: var(--text); font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;
-    transition: transform 0.12s var(--ease), background 0.2s;
-  }
-  .btn:active, .ring button:active, .power:active, .chip:active { transform: scale(0.94); }
-  .btn.pressed { background: var(--panel-2); }
-  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
-  .btn svg { width: 22px; height: 22px; }
-
-  .rockers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-  .rocker {
-    border-radius: 24px; background: var(--panel); border: 1px solid var(--edge); overflow: hidden;
-    display: flex; flex-direction: column;
-  }
-  .rocker button { flex: 1; height: 62px; border: 0; background: transparent; color: var(--text); font-size: 24px; }
-  .rocker span { text-align: center; font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 0; }
-  .middle { display: flex; flex-direction: column; gap: 12px; }
-  .middle .btn { height: 62px; }
-
-  /* Tabs */
-  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .chip {
-    height: 46px; border-radius: 14px; border: 1px solid var(--edge); background: transparent;
-    color: var(--dim); font-size: 14px; font-weight: 600;
-  }
-  .chip.on { background: var(--panel-2); color: var(--text); }
-  .sheet { display: none; background: var(--panel); border: 1px solid var(--edge); border-radius: 24px; padding: 14px; }
-  .sheet.show { display: block; }
-  .kb { display: flex; gap: 10px; }
-  .kb input {
-    flex: 1; height: 52px; border-radius: 14px; border: 1px solid var(--edge); background: var(--panel-2);
-    color: var(--text); padding: 0 14px; font-size: 17px; user-select: text; -webkit-user-select: text;
-  }
-  .kb .btn { width: 90px; height: 52px; }
-  .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .nums .btn { height: 54px; font-size: 20px; }
-  .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 340px; overflow-y: auto; }
-  .apps .btn { height: 64px; font-size: 13px; padding: 0 8px; text-align: center; line-height: 1.2; }
-  .more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .more .btn { height: 54px; font-size: 13px; }
-  .small { font-size: 12px; color: var(--dim); text-align: center; margin-top: 10px; }
-  .setup input { width: 100%; height: 48px; margin-top: 10px; border-radius: 12px; border: 1px solid var(--edge); background: var(--panel-2); color: var(--text); padding: 0 12px; font-size: 16px; user-select: text; -webkit-user-select: text; }
+  html, body { background: var(--bg); color: var(--text); min-height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .app { max-width: 460px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 40px) 22px calc(env(safe-area-inset-bottom) + 28px); }
+  .icon { width: 76px; height: 76px; border-radius: 20px; background: linear-gradient(160deg, #3d8bff, #1557d6); display: grid; place-items: center; }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-top: 22px; }
+  .lead { font-size: 17px; line-height: 1.5; color: var(--dim); margin-top: 10px; }
+  .btn { display: block; width: 100%; margin-top: 28px; padding: 18px; border-radius: 18px; border: 0; background: var(--accent); color: #fff; font-size: 18px; font-weight: 700; text-align: center; text-decoration: none; }
+  .btn.ghost { background: var(--panel); border: 1px solid var(--edge); margin-top: 12px; font-weight: 600; }
+  .card { margin-top: 30px; padding: 20px 20px 8px; border-radius: 22px; background: var(--panel); border: 1px solid var(--edge); }
+  .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+  .step { display: flex; gap: 14px; margin-bottom: 16px; font-size: 15.5px; line-height: 1.45; color: var(--dim); }
+  .step b { color: var(--text); font-weight: 600; }
+  .num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: rgba(91, 140, 255, 0.18); color: #9db8ff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+  .small { font-size: 12px; color: var(--dim); text-align: center; margin-top: 26px; }
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="icon">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="9" r="2.4"/><path d="M10 15h4M10 18h4"/></svg>
+  </div>
+  <h1>Control your TV from this phone</h1>
+  <p class="lead">Your TV’s remote on your phone is Samsung’s free <b>SmartThings</b> app — the official remote for this TV, with a touchpad, keyboard, volume and apps.</p>
 
-  <header>
-    <div class="status"><span class="dot" id="dot"></span><span id="status">Connecting…</span></div>
-    <button class="power" data-key="KEY_POWER" aria-label="Power off">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
-    </button>
-  </header>
+  <a class="btn" id="open" href="#">Open SmartThings</a>
+  <a class="btn ghost" id="store" href="#">Get SmartThings</a>
 
-  <div class="notice" id="notice"></div>
-
-  <div class="pad-wrap">
-    <button class="mode" id="mode">Buttons</button>
-    <div class="touchpad" id="touchpad"><div class="hint">Swipe to move · Tap to select</div></div>
-    <div class="dpad" id="dpad">
-      <div class="ring">
-        <button class="u" data-key="KEY_UP" data-repeat>▲</button>
-        <button class="l" data-key="KEY_LEFT" data-repeat>◀</button>
-        <button class="ok" data-key="KEY_ENTER">OK</button>
-        <button class="r" data-key="KEY_RIGHT" data-repeat>▶</button>
-        <button class="d" data-key="KEY_DOWN" data-repeat>▼</button>
-      </div>
-    </div>
+  <div class="card">
+    <h2>First time only</h2>
+    <div class="step"><span class="num">1</span><span>Open <b>SmartThings</b> and sign in with your <b>Samsung account</b>.</span></div>
+    <div class="step"><span class="num">2</span><span>Make sure this phone is on the <b>same Wi-Fi</b> as the TV. Your TV usually appears by itself — if not, tap <b>+</b> → <b>Device</b> → <b>TV</b> → <b>Samsung</b>.</span></div>
+    <div class="step"><span class="num">3</span><span>Tap the TV, then <b>Remote</b>. If the TV asks to allow your phone, choose <b>Allow</b>.</span></div>
   </div>
 
-  <div class="row">
-    <button class="btn" data-key="KEY_RETURN">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>Back
-    </button>
-    <button class="btn primary" id="home">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg>Home
-    </button>
-    <button class="btn" data-key="KEY_PLAY_BACK">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v16l9-8z"/><rect x="15" y="5" width="3" height="14" rx="1"/><rect x="19.5" y="5" width="3" height="14" rx="1" transform="translate(-1 0)"/></svg>Play
-    </button>
-  </div>
-
-  <div class="rockers">
-    <div class="rocker">
-      <button data-key="KEY_VOLUP" data-repeat>+</button><span>Vol</span><button data-key="KEY_VOLDOWN" data-repeat>−</button>
-    </div>
-    <div class="middle">
-      <button class="btn" data-key="KEY_MUTE">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>Mute
-      </button>
-      <button class="btn" data-key="KEY_SOURCE">Source</button>
-    </div>
-    <div class="rocker">
-      <button data-key="KEY_CHUP" data-repeat>+</button><span>Ch</span><button data-key="KEY_CHDOWN" data-repeat>−</button>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <button class="chip on" data-tab="keyboard">Type</button>
-    <button class="chip" data-tab="apps">Apps</button>
-    <button class="chip" data-tab="numbers">123</button>
-    <button class="chip" data-tab="more">More</button>
-  </div>
-
-  <div class="sheet show" id="sheet-keyboard">
-    <div class="kb">
-      <input id="text" type="text" placeholder="Type on the TV…" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button class="btn primary" id="send">Done</button>
-    </div>
-    <div class="small">Opens a TV search box first, then type here.</div>
-  </div>
-  <div class="sheet" id="sheet-apps"><div class="apps" id="apps"><div class="small">Loading apps…</div></div></div>
-  <div class="sheet" id="sheet-numbers">
-    <div class="nums">
-      <button class="btn" data-key="KEY_1">1</button><button class="btn" data-key="KEY_2">2</button><button class="btn" data-key="KEY_3">3</button>
-      <button class="btn" data-key="KEY_4">4</button><button class="btn" data-key="KEY_5">5</button><button class="btn" data-key="KEY_6">6</button>
-      <button class="btn" data-key="KEY_7">7</button><button class="btn" data-key="KEY_8">8</button><button class="btn" data-key="KEY_9">9</button>
-      <button class="btn" data-key="KEY_PRECH">Prev</button><button class="btn" data-key="KEY_0">0</button><button class="btn" data-key="KEY_ENTER">Enter</button>
-    </div>
-  </div>
-  <div class="sheet" id="sheet-more">
-    <div class="more">
-      <button class="btn" data-key="KEY_REWIND" data-repeat>⏪ Rewind</button>
-      <button class="btn" data-key="KEY_PLAY">▶ Play</button>
-      <button class="btn" data-key="KEY_FF" data-repeat>Forward ⏩</button>
-      <button class="btn" data-key="KEY_PAUSE">❚❚ Pause</button>
-      <button class="btn" data-key="KEY_STOP">■ Stop</button>
-      <button class="btn" data-key="KEY_CAPTION">Subtitles</button>
-      <button class="btn" data-key="KEY_MENU">Settings</button>
-      <button class="btn" data-key="KEY_INFO">Info</button>
-      <button class="btn" data-key="KEY_GUIDE">Guide</button>
-      <button class="btn" data-key="KEY_HOME">Samsung menu</button>
-      <button class="btn" data-key="KEY_EXIT">Exit app</button>
-      <button class="btn" id="change-tv">Change TV</button>
-    </div>
-  </div>
-
-  <div class="small" id="diag"></div>
-  <div class="small" id="version"></div>
+  <p class="small" id="version"></p>
 </div>
-
 <script>
 (function () {
-  "use strict";
-  var REMOTE_VERSION = "4";
+  var VERSION = "5";
+  var ANDROID_PKG = "com.samsung.android.oneconnect";
+  var PLAY = "https://play.google.com/store/apps/details?id=" + ANDROID_PKG;
+  var APPSTORE = "https://apps.apple.com/app/smartthings/id1222822904";
+  var ua = navigator.userAgent;
+  var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var android = /Android/.test(ua);
 
-  // ---------- Settings from the QR code (#ip=…&app=…) ----------
-  var hash = {};
-  location.hash.replace(/^#/, "").split("&").forEach(function (kv) {
-    if (!kv) return;
-    var p = kv.split("=");
-    hash[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || "");
-  });
-  var store = {
-    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-  };
-  if (hash.ip) store.set("tvIp", hash.ip);
-  if (hash.app) store.set("homeApp", hash.app);
-  var ip = store.get("tvIp");
-  var homeApp = store.get("homeApp") || "CineHomeTV.Home";
-  var NAME = "Phone Remote";
+  // Android: open the app if it's installed, otherwise Chrome falls back to its Play Store page.
+  var openUrl = android
+    ? "intent://#Intent;package=" + ANDROID_PKG + ";action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;S.browser_fallback_url=" + encodeURIComponent(PLAY) + ";end"
+    : ios ? APPSTORE : PLAY;
+  var storeUrl = ios ? APPSTORE : PLAY;
 
-  var $ = function (id) { return document.getElementById(id); };
-  var ws = null, connected = false, retry = 0, retryTimer = null;
+  document.getElementById("open").href = openUrl;
+  document.getElementById("store").href = storeUrl;
+  if (ios) document.getElementById("open").textContent = "Get or open SmartThings";
+  document.getElementById("version").textContent = "Remote v" + VERSION;
 
-  // ---------- Connection ----------
-  function urls() {
-    var q = "/api/v2/channels/samsung.remote.control?name=" + btoa(NAME);
-    var token = store.get("token:" + ip);
-    // 2021+ Samsung TVs only accept remote control over the secure port.
-    return "wss://" + ip + ":8002" + q + (token ? "&token=" + token : "");
-  }
-
-  // How the last attempt ended, so the page can say what actually happened.
-  var waitingForAllow = false, lastReply = "";
-
-  function connect() {
-    clearTimeout(retryTimer);
-    if (!ip) { askForIp(); return; }
-    var url = urls();
-    if (!waitingForAllow) setStatus("Connecting…", "");
-    var opened = false;
-    try { ws = new WebSocket(url); } catch (e) { return scheduleRetry(); }
-
-    ws.onopen = function () { opened = true; };
-    ws.onmessage = function (ev) {
-      var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-      if (msg.event) lastReply = msg.event;
-      if (msg.event === "ms.channel.connect") {
-        connected = true; retry = 0; waitingForAllow = false;
-        if (msg.data && msg.data.token) store.set("token:" + ip, msg.data.token);
-        setStatus("Connected to <b>TV</b>", "ok");
-        notice("");
-        requestApps();
-      } else if (msg.event === "ms.channel.unauthorized" || msg.event === "ms.channel.timeOut") {
-        showAllow(msg.event === "ms.channel.timeOut");
-      } else if (msg.event === "ed.installedApp.get") {
-        renderApps(msg.data && msg.data.data || []);
-      }
-    };
-    ws.onclose = function (ev) {
-      var wasConnected = connected;
-      connected = false;
-      if (waitingForAllow) {
-        // The TV hangs up while its "Allow?" pop-up is open; ask again slowly so the pop-up isn't replaced.
-        retryTimer = setTimeout(connect, 12000);
-        return;
-      }
-      if (!opened) {
-        notReached();
-      } else if (wasConnected) {
-        setStatus("Reconnecting…", "");
-      } else {
-        // Reached the TV, but it closed without letting us in.
-        setStatus("TV didn’t let this phone in", "bad");
-        notice("<strong>The TV refused the connection</strong>The TV answered but closed the connection" +
-          (lastReply ? " (it said: " + lastReply + ")" : " (code " + ev.code + ")") + ". If you pressed “Deny” on the TV before, allow this phone in " +
-          "<b>Settings → General → External Device Manager → Device Connection Manager → Device List</b>.<br><button class='link' onclick='location.reload()'>Try again</button>");
-      }
-      scheduleRetry();
-    };
-  }
-
-  // The connection never opened: find out whether Chrome's local-network permission or the
-  // TV's certificate is in the way, and say which.
-  var diagRunning = false, lastCause = "";
-  function notReached() {
-    setStatus("Not connected", "bad");
-    if (diagRunning) return;
-    diagRunning = true;
-    lnaState(function (state) {
-      if (state === "denied") return done("lna-denied", state);
-      if (state === "prompt") return done("lna-prompt", state);
-      probeTv(function (ok) { done(ok ? "socket-blocked" : "cert", state); });
-    });
-    function done(cause, state) {
-      diagRunning = false;
-      $("diag").textContent = "Check: local network " + state + " · TV " + (cause === "socket-blocked" ? "reachable" : cause === "cert" ? "not reachable yet" : "–");
-      if (cause !== lastCause || !$("notice").classList.contains("show")) showCause(cause);
-      lastCause = cause;
-    }
-  }
-
-  function lnaState(cb) {
-    if (!navigator.permissions || !navigator.permissions.query) { cb("unknown"); return; }
-    navigator.permissions.query({ name: "local-network-access" }).then(function (p) { cb(p.state); }, function () {
-      navigator.permissions.query({ name: "local-network" }).then(function (p) { cb(p.state); }, function () { cb("unknown"); });
-    });
-  }
-
-  // Can this browser make any secure request to the TV? (Fails until the certificate is accepted.)
-  function probeTv(cb) {
-    var finished = false;
-    var t = setTimeout(function () { if (!finished) { finished = true; cb(false); } }, 6000);
-    var end = function (ok) { if (!finished) { finished = true; clearTimeout(t); cb(ok); } };
-    try {
-      fetch("https://" + ip + ":8002/api/v2/", { mode: "no-cors", cache: "no-store", targetAddressSpace: "local" })
-        .then(function () { end(true); }, function () { end(false); });
-    } catch (e) { end(false); }
-  }
-
-  function showCause(cause) {
-    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    if (cause === "lna-denied") {
-      notice("<strong>Chrome is blocking your home network</strong>This page isn’t allowed to talk to devices on your Wi-Fi. Tap the icon at the <b>left of the address bar</b> → <b>Permissions</b> (or Site settings) → <b>Local network access</b> → <b>Allow</b>, then reload.<br><button class='link' onclick='location.reload()'>Reload</button>");
-    } else if (cause === "lna-prompt") {
-      notice("<strong>Let this page reach your TV</strong>Chrome asks before a website talks to devices on your Wi-Fi. Tap the button, then choose <b>Allow</b>.<br><button class='link' id='lna-go'>Allow access to my TV</button>");
-      var b = $("lna-go");
-      if (b) b.onclick = function () { probeTv(function () { lastCause = ""; retry = 0; connect(); }); };
-    } else if (cause === "socket-blocked") {
-      notice("<strong>Almost there</strong>Your phone can reach the TV, but the live connection was blocked. Reload this page; if it stays, close the tab and scan the TV’s QR code again.<br><button class='link' onclick='location.reload()'>Reload</button>");
-    } else {
-      notice("<strong>One-time setup on this phone</strong>" +
-        "1. Tap <b>Open TV address</b> below.<br>" +
-        "2. On the warning page tap " + (ios ? "<b>Show Details → visit this website</b>" : "<b>Advanced → Proceed to " + ip + "</b>") + ". It’s your own TV, so this is safe.<br>" +
-        "3. A page of text appears (starting with {&quot;device&quot;). Come back to this tab; it connects by itself.<br>" +
-        "Your phone must be on the same Wi-Fi as the TV.<br>" +
-        "<a href='https://" + ip + ":8002/api/v2/' target='_blank' rel='noopener'>Open TV address</a>" +
-        (ios && retry > 3 ? "<br><br>Still not connecting? iPhone may block this kind of connection. Samsung’s free SmartThings app has a full remote for this TV.<br><a href='https://apps.apple.com/app/smartthings/id1222822904' target='_blank' rel='noopener'>Get SmartThings</a>" : ""));
-    }
-  }
-
-  function showAllow(timedOut) {
-    waitingForAllow = true;
-    setStatus("Waiting for you to press Allow on the TV", "bad");
-    notice("<strong>Press “Allow” on your TV</strong>The TV is showing a pop-up asking whether “" + NAME + "” may control it. Choose <b>Allow</b> with the TV remote; this page connects by itself straight after." +
-      (timedOut ? "<br><br>The last pop-up closed before Allow was pressed, so the TV is asking again." : ""));
-  }
-
-  function scheduleRetry() {
-    retry++;
-    retryTimer = setTimeout(connect, Math.min(1500 * retry, 10000));
-  }
-
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && !connected && !waitingForAllow) { retry = 0; connect(); }
-  });
-
-  function send(obj) {
-    if (ws && connected && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
-    return false;
-  }
-
-  function key(k) {
-    if (navigator.vibrate) navigator.vibrate(8);
-    send({ method: "ms.remote.control", params: { Cmd: "Click", DataOfCmd: k, Option: "false", TypeOfRemote: "SendRemoteKey" } });
-  }
-
-  function launch(appId, type) {
-    send({ method: "ms.channel.emit", params: { event: "ed.apps.launch", to: "host",
-      data: { appId: appId, action_type: type === 4 ? "NATIVE_LAUNCH" : "DEEP_LINK" } } });
-  }
-
-  function requestApps() {
-    send({ method: "ms.channel.emit", params: { event: "ed.installedApp.get", to: "host" } });
-  }
-
-  function sendText(text) {
-    var b64 = btoa(unescape(encodeURIComponent(text)));
-    send({ method: "ms.remote.control", params: { Cmd: b64, DataOfCmd: "base64", TypeOfRemote: "SendInputString" } });
-  }
-
-  // ---------- UI ----------
-  function setStatus(html, cls) {
-    $("status").innerHTML = html;
-    $("dot").className = "dot " + (cls || "");
-  }
-  function notice(html) {
-    var n = $("notice");
-    n.innerHTML = html;
-    n.className = "notice" + (html ? " show" : "");
-  }
-  function askForIp() {
-    notice("<div class='setup'><strong>Which TV?</strong>Enter the TV’s IP address. It’s shown under the QR code on the TV.<input id='ip-in' inputmode='decimal' placeholder='192.168.1.8' value='" + (ip || "") + "'><button class='link' id='ip-save'>Connect</button></div>");
-    $("ip-save").onclick = function () {
-      var v = $("ip-in").value.trim();
-      if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) return;
-      ip = v; store.set("tvIp", v); retry = 0; notice(""); connect();
-    };
-  }
-
-  // Buttons with data-key; data-repeat keeps sending while held.
-  Array.prototype.forEach.call(document.querySelectorAll("[data-key]"), function (el) {
-    var k = el.getAttribute("data-key"), repeat = el.hasAttribute("data-repeat"), t1, t2;
-    el.addEventListener("pointerdown", function (e) {
-      e.preventDefault();
-      el.classList.add("pressed");
-      key(k);
-      if (repeat) t1 = setTimeout(function () { t2 = setInterval(function () { key(k); }, 130); }, 420);
-    });
-    var end = function () { el.classList.remove("pressed"); clearTimeout(t1); clearInterval(t2); };
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointerleave", end);
-    el.addEventListener("pointercancel", end);
-    el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-  });
-
-  // Home opens our home screen app instead of Samsung's.
-  $("home").addEventListener("click", function () {
-    if (navigator.vibrate) navigator.vibrate(8);
-    launch(homeApp, 2);
-  });
-
-  // Touchpad: swipe = arrow, tap = OK, hold after swiping = keep moving.
-  (function () {
-    var pad = $("touchpad"), sx = 0, sy = 0, lx = 0, ly = 0, moved = false, holdTimer = null, holdDir = null, t0 = 0;
-    var STEP = 46;
-    function dirOf(dx, dy) { return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "KEY_RIGHT" : "KEY_LEFT") : (dy > 0 ? "KEY_DOWN" : "KEY_UP"); }
-    function flash(x, y, k) {
-      var s = document.createElement("div");
-      s.className = "arrow-flash";
-      s.textContent = { KEY_UP: "▲", KEY_DOWN: "▼", KEY_LEFT: "◀", KEY_RIGHT: "▶" }[k];
-      s.style.left = (x - 14) + "px"; s.style.top = (y - 24) + "px";
-      pad.appendChild(s); setTimeout(function () { s.remove(); }, 420);
-    }
-    pad.addEventListener("pointerdown", function (e) {
-      pad.setPointerCapture(e.pointerId);
-      var r = pad.getBoundingClientRect();
-      sx = lx = e.clientX; sy = ly = e.clientY; moved = false; t0 = Date.now();
-      var rp = document.createElement("div");
-      rp.className = "ripple"; rp.style.left = (e.clientX - r.left) + "px"; rp.style.top = (e.clientY - r.top) + "px";
-      pad.appendChild(rp); setTimeout(function () { rp.remove(); }, 460);
-    });
-    pad.addEventListener("pointermove", function (e) {
-      if (!e.buttons && e.pointerType === "mouse") return;
-      var dx = e.clientX - lx, dy = e.clientY - ly;
-      if (Math.abs(dx) >= STEP || Math.abs(dy) >= STEP) {
-        var k = dirOf(dx, dy);
-        key(k); moved = true; holdDir = k;
-        var r = pad.getBoundingClientRect();
-        flash(e.clientX - r.left, e.clientY - r.top, k);
-        lx = e.clientX; ly = e.clientY;
-        clearInterval(holdTimer);
-        // If the finger rests after a swipe, keep scrolling in that direction until it lifts.
-        clearTimeout(pad._still);
-        pad._still = setTimeout(function () {
-          if (holdDir) holdTimer = setInterval(function () { key(holdDir); }, 180);
-        }, 450);
-      }
-    });
-    function up() {
-      clearTimeout(pad._still); clearInterval(holdTimer); holdDir = null;
-      if (!moved && Date.now() - t0 < 500) key("KEY_ENTER");
-    }
-    pad.addEventListener("pointerup", up);
-    pad.addEventListener("pointercancel", function () { clearTimeout(pad._still); clearInterval(holdTimer); holdDir = null; });
-  })();
-
-  $("mode").addEventListener("click", function () {
-    var dp = $("dpad").classList.toggle("show");
-    $("touchpad").classList.toggle("hide", dp);
-    this.textContent = dp ? "Touchpad" : "Buttons";
-    store.set("padMode", dp ? "dpad" : "touch");
-  });
-  if (store.get("padMode") === "dpad") $("mode").click();
-
-  // Tabs
-  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
-    c.addEventListener("click", function () {
-      Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (x) { x.classList.toggle("on", x === c); });
-      Array.prototype.forEach.call(document.querySelectorAll(".sheet"), function (s) { s.classList.toggle("show", s.id === "sheet-" + c.getAttribute("data-tab")); });
-      if (c.getAttribute("data-tab") === "apps") requestApps();
-    });
-  });
-
-  // Keyboard: the TV's on-screen text box mirrors what's typed here.
-  var typeTimer;
-  $("text").addEventListener("input", function () {
-    var v = this.value;
-    clearTimeout(typeTimer);
-    typeTimer = setTimeout(function () { sendText(v); }, 200);
-  });
-  $("send").addEventListener("click", function () {
-    sendText($("text").value);
-    send({ method: "ms.remote.control", params: { TypeOfRemote: "SendInputEnd" } });
-    $("text").value = ""; $("text").blur();
-  });
-
-  function renderApps(list) {
-    var box = $("apps");
-    box.innerHTML = "";
-    var own = document.createElement("button");
-    own.className = "btn primary"; own.textContent = "Home screen";
-    own.onclick = function () { launch(homeApp, 2); };
-    box.appendChild(own);
-    list.sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); }).forEach(function (a) {
-      if (a.appId === homeApp) return;
-      var b = document.createElement("button");
-      b.className = "btn"; b.textContent = a.name;
-      b.onclick = function () { if (navigator.vibrate) navigator.vibrate(8); launch(a.appId, a.app_type); };
-      box.appendChild(b);
-    });
-  }
-
-  $("change-tv").addEventListener("click", askForIp);
-
-  $("version").textContent = "Remote v" + REMOTE_VERSION;
-  connect();
+  // Coming from the TV's QR code: go straight to SmartThings.
+  if (android || ios) setTimeout(function () { location.href = openUrl; }, 400);
 })();
 </script>
 </body>
