@@ -277,61 +277,77 @@
     return "wss://" + ip + ":8002" + q + (token ? "&token=" + token : "");
   }
 
+  // How the last attempt ended, so the page can say what actually happened.
+  var waitingForAllow = false, lastReply = "";
+
   function connect() {
     clearTimeout(retryTimer);
     if (!ip) { askForIp(); return; }
     var url = urls();
-    setStatus("Connecting…", "");
+    if (!waitingForAllow) setStatus("Connecting…", "");
     var opened = false;
     try { ws = new WebSocket(url); } catch (e) { return scheduleRetry(); }
 
     ws.onopen = function () { opened = true; };
     ws.onmessage = function (ev) {
       var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.event) lastReply = msg.event;
       if (msg.event === "ms.channel.connect") {
-        connected = true; retry = 0;
+        connected = true; retry = 0; waitingForAllow = false;
         if (msg.data && msg.data.token) store.set("token:" + ip, msg.data.token);
         setStatus("Connected to <b>TV</b>", "ok");
         notice("");
         requestApps();
-      } else if (msg.event === "ms.channel.unauthorized") {
-        setStatus("Waiting for TV", "bad");
-        notice("<strong>Press “Allow” on your TV</strong>A pop-up on the TV is asking whether “" + NAME + "” may control it. Choose Allow with the TV remote.");
+      } else if (msg.event === "ms.channel.unauthorized" || msg.event === "ms.channel.timeOut") {
+        showAllow(msg.event === "ms.channel.timeOut");
       } else if (msg.event === "ed.installedApp.get") {
         renderApps(msg.data && msg.data.data || []);
-      } else if (msg.event === "ms.channel.timeOut") {
-        notice("<strong>The TV didn’t answer in time</strong>Make sure you pressed Allow on the TV, then try again.<br><button class='link' onclick='location.reload()'>Try again</button>");
       }
     };
-    ws.onclose = function () {
+    ws.onclose = function (ev) {
       var wasConnected = connected;
       connected = false;
+      if (waitingForAllow) {
+        // The TV hangs up while its "Allow?" pop-up is open; ask again slowly so the pop-up isn't replaced.
+        retryTimer = setTimeout(connect, 12000);
+        return;
+      }
       if (!opened) {
         // Usually the TV's self-signed certificate hasn't been accepted on this phone yet.
         setStatus("Not connected", "bad");
         var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         notice("<strong>One-time setup on this phone</strong>Your TV uses its own security certificate. Open the TV’s secure address below, choose " +
-          (ios ? "<b>Show Details → visit this website</b>" : "<b>Advanced → Proceed</b>") + ", then come back here.<br>" +
+          (ios ? "<b>Show Details → visit this website</b>" : "<b>Advanced → Proceed</b>") + ", then come back here." +
+          "<br>Also make sure this phone is on the same Wi-Fi as the TV (" + ip + ").<br>" +
           "<a href='https://" + ip + ":8002/api/v2/' target='_blank' rel='noopener'>Open TV address</a>" +
           (ios && retry > 3 ? "<br><br>Still not connecting? iPhone may block this kind of connection. Samsung’s free SmartThings app has a full remote for this TV.<br><a href='https://apps.apple.com/app/smartthings/id1222822904' target='_blank' rel='noopener'>Get SmartThings</a>" : ""));
+      } else if (wasConnected) {
+        setStatus("Reconnecting…", "");
       } else {
-        setStatus(wasConnected ? "Reconnecting…" : "Not connected", wasConnected ? "" : "bad");
-        if (!wasConnected && retry > 2) {
-          notice("<strong>Can’t reach the TV</strong>Check that the TV is on and that this phone is on the same Wi-Fi as the TV (" + ip + ").<br><button class='link' id='edit-ip'>Change TV address</button>");
-          var b = $("edit-ip"); if (b) b.onclick = askForIp;
-        }
+        // Reached the TV, but it closed without letting us in.
+        setStatus("TV didn’t let this phone in", "bad");
+        notice("<strong>The TV refused the connection</strong>The TV answered but closed the connection" +
+          (lastReply ? " (it said: " + lastReply + ")" : " (code " + ev.code + ")") + ". If you pressed “Deny” on the TV before, allow this phone in " +
+          "<b>Settings → General → External Device Manager → Device Connection Manager → Device List</b>.<br><button class='link' onclick='location.reload()'>Try again</button>");
       }
       scheduleRetry();
     };
   }
 
+  function showAllow(timedOut) {
+    waitingForAllow = true;
+    setStatus("Waiting for you to press Allow on the TV", "bad");
+    notice("<strong>Press “Allow” on your TV</strong>The TV is showing a pop-up asking whether “" + NAME + "” may control it. Choose <b>Allow</b> with the TV remote; this page connects by itself straight after." +
+      (timedOut ? "<br><br>The last pop-up closed before Allow was pressed, so the TV is asking again." : ""));
+  }
+
   function scheduleRetry() {
     retry++;
-    retryTimer = setTimeout(connect, Math.min(1000 * retry, 8000));
+    retryTimer = setTimeout(connect, Math.min(1500 * retry, 10000));
   }
 
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && !connected) { retry = 0; connect(); }
+    if (!document.hidden && !connected && !waitingForAllow) { retry = 0; connect(); }
   });
 
   function send(obj) {
