@@ -243,11 +243,13 @@
     </div>
   </div>
 
+  <div class="small" id="version"></div>
 </div>
 
 <script>
 (function () {
   "use strict";
+  var REMOTE_VERSION = "3";
 
   // ---------- Settings from the QR code (#ip=…&app=…) ----------
   var hash = {};
@@ -508,6 +510,7 @@
 
   $("change-tv").addEventListener("click", askForIp);
 
+  $("version").textContent = "Remote v" + REMOTE_VERSION;
   connect();
 })();
 </script>
